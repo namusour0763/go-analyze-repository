@@ -201,3 +201,83 @@ func TestSortingByLines(t *testing.T) {
 		t.Errorf("Sorting verification failed: JS=%d, Go=%d, Text=%d", jsLines, goLines, textLines)
 	}
 }
+
+func TestDirectoryExclusion(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// 通常のファイルを作成
+	normalFile := filepath.Join(tempDir, "normal.js")
+	err := os.WriteFile(normalFile, []byte("console.log('normal');\n"), 0644)
+	if err != nil {
+		t.Fatalf("通常ファイルの作成に失敗: %v", err)
+	}
+
+	// node_modulesディレクトリとその中にファイルを作成
+	nodeModulesDir := filepath.Join(tempDir, "node_modules")
+	err = os.Mkdir(nodeModulesDir, 0755)
+	if err != nil {
+		t.Fatalf("node_modulesディレクトリの作成に失敗: %v", err)
+	}
+
+	excludedFile := filepath.Join(nodeModulesDir, "excluded.js")
+	err = os.WriteFile(excludedFile, []byte("console.log('excluded');\n"), 0644)
+	if err != nil {
+		t.Fatalf("除外ファイルの作成に失敗: %v", err)
+	}
+
+	// .gitディレクトリとその中にファイルを作成
+	gitDir := filepath.Join(tempDir, ".git")
+	err = os.Mkdir(gitDir, 0755)
+	if err != nil {
+		t.Fatalf(".gitディレクトリの作成に失敗: %v", err)
+	}
+
+	gitFile := filepath.Join(gitDir, "config")
+	err = os.WriteFile(gitFile, []byte("[core]\n    repositoryformatversion = 0\n"), 0644)
+	if err != nil {
+		t.Fatalf("gitファイルの作成に失敗: %v", err)
+	}
+
+	stats, err := analyzeDirectory(tempDir)
+	if err != nil {
+		t.Fatalf("analyzeDirectory() failed: %v", err)
+	}
+
+	// JavaScriptファイルは1行のみ（除外されたファイルは含まれない）
+	if jsStats, exists := stats["JavaScript"]; !exists {
+		t.Error("JavaScriptファイルが見つかりません")
+	} else if jsStats.Lines != 1 {
+		t.Errorf("JavaScript lines = %d; expected 1 (excluded files should not be counted)", jsStats.Lines)
+	}
+
+	// configファイル（.gitディレクトリ内）は除外されているべき
+	if _, exists := stats["config"]; exists {
+		t.Error(".gitディレクトリ内のconfigファイルが除外されていません")
+	}
+}
+
+func TestShouldExcludeDirectory(t *testing.T) {
+	tests := []struct {
+		dirName  string
+		expected bool
+	}{
+		{"node_modules", true},
+		{".git", true},
+		{"vendor", true},
+		{"build", true},
+		{"dist", true},
+		{".vscode", true},
+		{"__pycache__", true},
+		{"src", false},
+		{"lib", false},
+		{"components", false},
+		{"", false},
+	}
+
+	for _, test := range tests {
+		result := shouldExcludeDirectory(test.dirName)
+		if result != test.expected {
+			t.Errorf("shouldExcludeDirectory(%s) = %v; expected %v", test.dirName, result, test.expected)
+		}
+	}
+}

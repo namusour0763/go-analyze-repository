@@ -76,6 +76,41 @@ func NewExtensionMap() *ExtensionMap {
 	}
 }
 
+var excludedDirectories = map[string]bool{
+	"node_modules":  true,
+	".git":          true,
+	".svn":          true,
+	".hg":           true,
+	".bzr":          true,
+	"vendor":        true,
+	"build":         true,
+	"dist":          true,
+	"target":        true,
+	"bin":           true,
+	"obj":           true,
+	"out":           true,
+	".next":         true,
+	".nuxt":         true,
+	".vscode":       true,
+	".idea":         true,
+	"__pycache__":   true,
+	".pytest_cache": true,
+	".coverage":     true,
+	".nyc_output":   true,
+	"coverage":      true,
+	"tmp":           true,
+	"temp":          true,
+	".tmp":          true,
+	".temp":         true,
+	"logs":          true,
+	".DS_Store":     true,
+	"Thumbs.db":     true,
+}
+
+func shouldExcludeDirectory(dirName string) bool {
+	return excludedDirectories[dirName]
+}
+
 func (em *ExtensionMap) GetDisplayName(ext string) string {
 	if displayName, exists := em.extensions[strings.ToLower(ext)]; exists {
 		return displayName
@@ -94,7 +129,7 @@ func countLinesInFile(filePath string) (int, error) {
 	// "token too long" エラーが発生するため、バイト単位での読み取りを使用
 	lineCount := 0
 	reader := bufio.NewReader(file)
-	
+
 	for {
 		_, err := reader.ReadBytes('\n')
 		if err != nil {
@@ -118,6 +153,9 @@ func analyzeDirectory(dirPath string) (map[string]*FileStats, error) {
 		}
 
 		if info.IsDir() {
+			if shouldExcludeDirectory(info.Name()) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
